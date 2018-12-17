@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -1234,6 +1235,7 @@ type PerformRequestOptions struct {
 	Path            string
 	Params          url.Values
 	Body            interface{}
+	BodyReader      io.ReadCloser
 	ContentType     string
 	IgnoreErrors    []int
 	Retrier         Retrier
@@ -1331,6 +1333,12 @@ func (c *Client) PerformRequest(ctx context.Context, opt PerformRequestOptions) 
 			err = req.SetBody(opt.Body, gzipEnabled)
 			if err != nil {
 				c.errorf("elastic: couldn't set body %+v for request: %v", opt.Body, err)
+				return nil, err
+			}
+		} else if opt.BodyReader != nil {
+			err = req.SetBodyReader(opt.BodyReader, gzipEnabled)
+			if err != nil {
+				c.errorf("elastic: couldn't set body %+v for request: %v", opt.BodyReader, err)
 				return nil, err
 			}
 		}

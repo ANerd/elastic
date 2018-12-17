@@ -52,6 +52,15 @@ func (r *Request) SetBody(body interface{}, gzipCompress bool) error {
 	}
 }
 
+// SetBodyReader sets the body in the request. This allows streaming
+// HTTP. You may pass a flag to compress the request via gzip.
+func (r *Request) SetBodyReader(body io.ReadCloser, gzipCompress bool) error {
+	if gzipCompress {
+		return r.setBodyReaderGzip(body)
+	}
+	return r.setBodyReader(body)
+}
+
 // setBodyJson encodes the body as a struct to be marshaled via json.Marshal.
 func (r *Request) setBodyJson(data interface{}) error {
 	body, err := json.Marshal(data)
@@ -102,6 +111,24 @@ func (r *Request) setBodyGzip(body interface{}) error {
 		r.Header.Set("Content-Type", "application/json")
 		return r.setBodyReader(bytes.NewReader(buf.Bytes()))
 	}
+}
+
+func (r *Request) setBodyReaderGzip(body io.ReadCloser) error {
+	r.Header.Add("Content-Encoding", "gzip")
+	r.Header.Add("Vary", "Accept-Encoding")
+
+	pr, pw := io.Pipe()
+	go func() {
+		gw := gzip.NewWriter(pw)
+		if _, err := io.Copy(gw, body); err != nil {
+			gw.Close()
+			pw.CloseWithError(err)
+		} else {
+			pw.CloseWithError(gw.Close())
+		}
+	}()
+
+	return r.setBodyReader(pr)
 }
 
 // setBodyReader writes the body from an io.Reader.
